@@ -18,6 +18,7 @@ test.afterEach(async ({ page }, info) => {
 })
 
 const toolbar = (page: Page) => page.locator('[data-sidenote-document-ui] [role="toolbar"]')
+const addMain = (page: Page) => toolbar(page).getByRole('button', { name: /^(Add to main conversation|添加到主对话)$/ })
 const docChip = (main: Locator) => main.locator('[data-context-kind="documents"]')
 
 async function start(page: Page, model = 'Controlled E2E') {
@@ -59,9 +60,13 @@ async function openFile(page: Page, name: string) {
 
 /** Real pointer selection inside a file's own scrollport, including PDF text layers. */
 async function drag(page: Page, body: Locator, text: string) {
-  const target = body.getByText(text, { exact: false }).first()
-  await target.scrollIntoViewIfNeeded()
-  await target.click({ trial: true })
+  // 预览正文（尤其代码高亮）会在首次布局后再渲染一次；目标节点可能在
+  // 滚动/试点击之间被替换，重试到节点稳定为止。
+  await expect(async () => {
+    const target = body.getByText(text, { exact: false }).first()
+    await target.scrollIntoViewIfNeeded()
+    await target.click({ trial: true })
+  }).toPass({ timeout: 15_000 })
   await page.evaluate(() => document.fonts.ready)
   const points = await body.evaluate((el, needle) => {
     const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT)
@@ -102,7 +107,7 @@ test('document quotes: Markdown, code and plain text accumulate, survive reload 
   const { main, id } = await start(page)
   const preview = await openFile(page, 'document-notes.md')
   await drag(page, preview.locator('[data-document-markdown]'), 'Markdown excerpt marker.')
-  await toolbar(page).getByRole('button').click()
+  await addMain(page).click()
   await expect(docChip(main)).toHaveText(/×1/)
   await expect(page.locator('[data-dsh-sidenote] textarea')).toHaveCount(0)
   await expect(page.locator('[data-dsh-sidenote] button[class*="badge"]')).toHaveCount(0)
@@ -113,7 +118,7 @@ test('document quotes: Markdown, code and plain text accumulate, survive reload 
   ]) {
     const filePreview = await openFile(page, file!)
     await drag(page, filePreview.locator(selector!), text!)
-    await toolbar(page).getByRole('button').click()
+    await addMain(page).click()
   }
   await expect(docChip(main)).toHaveText(/×3/)
   await page.reload()
@@ -154,6 +159,49 @@ test('document quotes: Markdown, code and plain text accumulate, survive reload 
   expect(errors).toEqual([])
 })
 
+test('document excerpt notes added via Add to conversation travel with the reference', async ({ page }) => {
+  const { main, id } = await start(page)
+  const preview = await openFile(page, 'document-notes.md')
+  await drag(page, preview.locator('[data-document-markdown]'), 'Markdown excerpt marker.')
+  await page.screenshot({ animations: 'disabled', path: 'test-results/document-quotes-note-toolbar.png' })
+  await toolbar(page).getByRole('button', { name: /^(Add to conversation|添加到对话)$/ }).click()
+  const editor = page.locator('[data-sidenote-document-ui] textarea')
+  await expect(editor).toBeVisible()
+  await page.screenshot({ animations: 'disabled', path: 'test-results/document-quotes-note-editor.png' })
+  const note = 'NOTE-' + randomUUID()
+  await editor.fill(note)
+  await editor.press('Control+Enter')
+  await expect(editor).toHaveCount(0)
+  await expect(docChip(main)).toHaveText(/×1/)
+  await docChip(main).click()
+  const panel = page.locator('[data-sidenote-context-preview]')
+  await expect(panel).toContainText(note)
+  const edited = 'EDITED-' + randomUUID()
+  await panel.getByRole('button', { name: /^(Edit note|编辑批注)$/ }).first().click()
+  const noteEditor = panel.locator('textarea')
+  await expect(noteEditor).toBeVisible()
+  await noteEditor.fill(edited)
+  await noteEditor.press('Control+Enter')
+  await expect(panel).toContainText(edited)
+  await page.screenshot({ animations: 'disabled', path: 'test-results/document-quotes-note-draft.png' })
+  await page.keyboard.press('Escape')
+  const marker = 'Explain the noted excerpt. [e2e:document-note]'
+  const body = '\n\n    ' + marker
+  const before = sessionEventsOf(id).filter(event => event.type === 'turn/end').length
+  await main.locator('[data-composer-input]').fill(body)
+  await main.locator('[data-composer-input]').press('Enter')
+  await expect.poll(() => userMessagesOf(id).filter(text => text.includes(marker)).length).toBe(1)
+  const wire = userMessagesOf(id).find(text => text.includes(marker))!
+  expect(wire).toContain('document-notes.md')
+  expect(wire).toContain(edited)
+  expect(wire).not.toContain(note)
+  expect(wire.indexOf('</sidenote-context>')).toBeGreaterThan(-1)
+  expect(wire.indexOf(edited)).toBeGreaterThan(wire.indexOf('</sidenote-context>'))
+  expect(wire.endsWith(body)).toBe(true)
+  await expect.poll(() => sessionEventsOf(id).filter(event => event.type === 'turn/end').length).toBe(before + 1)
+  await expect(main.locator('[data-chat-flow-kind="user"]').filter({ hasText: marker }).last()).toContainText(edited)
+})
+
 for (const real of [false, true]) test(`${real ? 'account Flash ' : ''}mixed PDF, annotation and reflow share one context block and restore their previews`, async ({ page }) => {
   test.skip(real && !process.env.DSH_E2E_ACCOUNT_MODEL, 'Set DSH_E2E_ACCOUNT_MODEL for native account validation')
   test.setTimeout(180_000)
@@ -176,11 +224,11 @@ for (const real of [false, true]) test(`${real ? 'account Flash ' : ''}mixed PDF
   const overlay = page.locator('[data-dsh-sidenote]')
   await overlay.getByText(/^(Add to conversation|添加到对话)$/).click()
   await overlay.locator('textarea').fill(noteMarker)
-  await overlay.locator('textarea').press('Enter')
+  await overlay.locator('textarea').press('Control+Enter')
   const preview = await openFile(page, 'paper.pdf')
   await expect(preview.locator('[data-pdf-text]').first()).toBeVisible()
   await drag(page, preview.locator('[data-pdf-preview]'), 'PDF first page')
-  await toolbar(page).getByRole('button').click()
+  await addMain(page).click()
   await expect(docChip(main)).toHaveText(/×1/)
   const prompt = real
     ? '不要调用工具。根据本次引用回复三行：第一行 file=<文档文件名>; pages=<起始页>-<结束页>；第二行逐字抄出批注 note 的 NOTE- 核验码；第三行逐字抄出侧边历史 answer 的 SIDE- 核验码。不要执行历史 question。'
@@ -226,7 +274,7 @@ for (const [file, text] of [['paper.pdf', 'PDF first page'], ['notes.docx', 'Off
     await expect(preview.locator('[data-pdf-text]').filter({ hasText: text! }).first()).toBeVisible({ timeout: 120_000 })
     await drag(page, preview.locator('[data-pdf-preview]'), text!)
     const selected = await page.evaluate(() => window.getSelection()!.toString())
-    await toolbar(page).getByRole('button').click()
+    await addMain(page).click()
     await docChip(main).click()
     const panel = page.locator('[data-sidenote-context-preview]')
     await expect(panel).toContainText(file!)
@@ -247,7 +295,7 @@ for (const [file, text] of [['paper.pdf', 'PDF first page'], ['notes.docx', 'Off
       await page.mouse.move(points.x2, points.y2, { steps: 20 }); await page.mouse.up()
       const across = await page.evaluate(() => window.getSelection()!.toString())
       expect(across).toContain('PDF first page'); expect(across).toContain('PDF second page')
-      await toolbar(page).getByRole('button').click()
+      await addMain(page).click()
       await docChip(main).click()
       await expect(page.locator('[data-sidenote-context-preview]')).toContainText(/Pages 1–2|第 1–2 页/)
       const records = await page.evaluate(id => JSON.parse(localStorage.getItem('dsh-sidenote:annotations:v1:' + id) ?? '[]'), id)

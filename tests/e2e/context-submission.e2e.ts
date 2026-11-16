@@ -16,7 +16,7 @@ async function addNote(page: Page, main: Locator, note: string) {
   const overlay = page.locator('[data-dsh-sidenote]')
   await overlay.getByText(/^(Add to conversation|添加到对话)$/).click()
   await overlay.locator('textarea').fill(note)
-  await overlay.locator('textarea').press('Enter')
+  await overlay.locator('textarea').press('Control+Enter')
   await expect(overlay.locator('textarea')).toHaveCount(0)
 }
 

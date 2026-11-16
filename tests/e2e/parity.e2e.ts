@@ -108,7 +108,7 @@ test('context-preview: horizontal chips reveal full editable details on hover wi
     const overlay = page.locator('[data-dsh-sidenote]')
     await overlay.getByText(/^(Add to conversation|添加到对话)$/).click()
     await overlay.locator('textarea').fill(note!)
-    await overlay.locator('textarea').press('Enter')
+    await overlay.locator('textarea').press('Control+Enter')
   }
   const dock = main.locator('[data-sidenote-context-dock]')
   const annotations = dock.getByRole('button', { name: /2 annotations|2 条注释/ })

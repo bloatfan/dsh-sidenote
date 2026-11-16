@@ -2,6 +2,14 @@
    z-index 纪律：全部固定 50 — 高于正文与 better-sidebar 面板 (40)，低于 DSH
    浮层栈 (100+)。颜色除品牌蓝角标外一律消费 DSH 令牌（皮肤跟随），缺省回退。 */
 
+/* 鼠标划选的原生选区与批注高亮同色：UA 默认的蓝底白字在正文上与黄色批注
+   标记割裂，这里只替换底色并保留正文字色（否则浅黄底会被 HighlightText 的
+   白字淹没）。样式随插件激活注入，停用后恢复宿主默认选区色。 */
+:global(::selection) {
+  background: rgba(255, 196, 0, 0.5);
+  color: inherit;
+}
+
 .badge {
   position: fixed;
   transform: translate(0, -50%);
@@ -26,10 +34,21 @@
   background: #1f78f0;
 }
 
+/* 常驻标记：标注过的原文保持淡黄色，未悬停、未编辑时也能看出角标对应的
+   原文位置；悬停角标或打开编辑器时切换为更深一档的 .highlight。
+   黄色在浅色/深色皮肤下都比品牌蓝更醒目，alpha 混色仍能透出正文字形。 */
+.highlightIdle {
+  position: fixed;
+  z-index: 48;
+  background: rgba(255, 196, 0, 0.32);
+  border-radius: 2px;
+  pointer-events: none;
+}
+
 .highlight {
   position: fixed;
   z-index: 49;
-  background: rgba(47, 136, 255, 0.22);
+  background: rgba(255, 190, 0, 0.55);
   border-radius: 2px;
   pointer-events: none;
 }

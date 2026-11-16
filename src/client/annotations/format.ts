@@ -26,15 +26,39 @@ export function formatAnnotationXml(index: number, item: QuoteItem): string {
   return `<reference type="annotation" index="${item.number ?? index}" source="${source}">\n<quote>${xmlText(item.text)}</quote>${note}\n</reference>`
 }
 
+/** 文件摘录的备注没有协议字段：保持 v4 兼容，附在引用块之后作为普通正文，
+ *  模型与用户气泡都能看到，旧客户端与旧历史不受影响。 */
+function documentNotesOf(items: readonly QuoteItem[]): string {
+  let ordinal = 0
+  const notes: string[] = []
+  for (const item of items) {
+    const document = item.document
+    if (!document) continue
+    ordinal += 1
+    const note = item.note.trim()
+    if (note === '') continue
+    const { pageStart, pageEnd, path } = document
+    const number = item.number ?? ordinal
+    const pages = pageStart === undefined ? ''
+      : ` · ${t(pageStart === pageEnd ? 'documentPage' : 'documentPages', { start: pageStart, end: pageEnd ?? pageStart })}`
+    notes.push(`[${number}] ${path}${pages}\n${note}`)
+  }
+  return notes.length ? `${t('documentNotesHeading')}\n${notes.join('\n\n')}` : ''
+}
+
 /** All pending kinds share one native message and one protocol envelope. */
 export function buildProtocolBlock(items: readonly QuoteItem[], reflows: readonly ReflowItem[] = []): string {
   const annotations = items.filter(item => !item.document)
+  const documents = items.filter(item => item.document)
   const references = [
     ...reflows.map((item, i) => buildReflowBlock(item, i + 1)),
-    ...items.filter(item => item.document).map((item, i) => formatDocumentQuote(item.number ?? i + 1, item.text, item.document!)),
+    ...documents.map((item, i) => formatDocumentQuote(item.number ?? i + 1, item.text, item.document!)),
     ...annotations.map((item, i) => formatAnnotationXml(i + 1, item)),
   ]
-  return references.length ? `<sidenote-context version="4">\n<guidance>${xmlText(t('protocolGuidance'))}</guidance>\n\n${references.join('\n\n')}\n</sidenote-context>` : ''
+  if (references.length === 0) return ''
+  const envelope = `<sidenote-context version="4">\n<guidance>${xmlText(t('protocolGuidance'))}</guidance>\n\n${references.join('\n\n')}\n</sidenote-context>`
+  const notes = documentNotesOf(documents)
+  return notes === '' ? envelope : `${envelope}\n\n${notes}`
 }
 
 // ── 反解析（气泡手术用；纯函数可测） ─────────────────────────────────────────

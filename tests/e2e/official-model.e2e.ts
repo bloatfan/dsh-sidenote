@@ -156,7 +156,7 @@ test('official Flash UI regressions: live context, empty annotation send and inl
   const overlay = page.locator('[data-dsh-sidenote]')
   await overlay.getByText(/^(Ask in side chat|在侧边聊天中提问)$/).click()
   await overlay.locator('textarea').fill('不要调用工具，只回复：批注直发验证通过')
-  await overlay.locator('textarea').press('Enter')
+  await overlay.locator('textarea').press('Control+Enter')
   await expect(input).toHaveText('')
   await expect(side.getByRole('button', { name: /^(Send annotations|发送注释)$/ })).toHaveCount(0)
   const send = side.getByRole('button', { name: /^(Send message|发送消息)$/ })

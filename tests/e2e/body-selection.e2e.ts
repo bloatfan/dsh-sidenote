@@ -37,7 +37,7 @@ async function processOpen(page: Page, view: Locator, turn: number, open: boolea
 async function addQuote(page: Page, note: string) {
   await toolbarOf(page).getByRole('button', { name: /^(Add to conversation|添加到对话)$/ }).click()
   const editor = page.locator('[data-dsh-sidenote] textarea')
-  await editor.fill(note); await editor.press('Enter')
+  await editor.fill(note); await editor.press('Control+Enter')
 }
 
 async function send(view: Locator, id: string, text: string) {
@@ -80,8 +80,11 @@ test('body-only selection survives display changes and rejects visible process c
   await dragBetween(page, first, beforeText, last, afterText)
   await expect(toolbarOf(page)).toHaveCount(0)
   await main.locator('[data-composer-input]').click()
+  const marks = page.locator('[data-dsh-sidenote] [data-sidenote-highlight]')
+  await expect(marks).not.toHaveCount(0)
+  await expect(page.locator('[data-dsh-sidenote] [data-sidenote-highlight="idle"]')).not.toHaveCount(0)
   await badgeOf(page, note).hover()
-  const highlights = page.locator('[data-dsh-sidenote] [class$="_highlight"]')
+  const highlights = page.locator('[data-dsh-sidenote] [data-sidenote-highlight="active"]')
   await expect(highlights).not.toHaveCount(0)
   const processBox = await main.locator('[data-step-process]').first().boundingBox()
   expect(processBox).not.toBeNull()
@@ -153,7 +156,7 @@ for (const real of [false, true]) test(`${real ? 'official Flash main' : 'native
     await toolbarOf(page).getByRole('button', { name: /^(Ask in side chat|在侧边聊天中提问)$/ }).click()
     const sideNote = 'SIDE-' + randomUUID()
     const editor = page.locator('[data-dsh-sidenote] textarea')
-    await editor.fill(sideNote); await editor.press('Enter')
+    await editor.fill(sideNote); await editor.press('Control+Enter')
     const side = sideChatOf(page)
     await expect(side.locator('[data-composer-input]')).toBeVisible()
     const child = (await side.getAttribute('data-sidenote-chat-session'))!

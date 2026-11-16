@@ -25,7 +25,7 @@ interface AnnotationContent {
   readonly sessionId: string
   /** Full selected text; preview truncation is visual only. */
   readonly text: string
-  /** Documents always use an empty note and never enter the annotation editor. */
+  /** Chat annotations and file excerpts may both carry an optional note. */
   readonly note: string
   readonly state: 'active' | 'sent'
   readonly createdAt: number
@@ -56,7 +56,7 @@ export interface DocumentAnnotation extends AnnotationContent {
 export type Annotation = ChatAnnotation | DocumentAnnotation
 type Assigned = 'id' | 'number' | 'state' | 'createdAt'
 export type ChatAnnotationDraft = Omit<ChatAnnotation, Assigned>
-export type DocumentAnnotationDraft = Omit<DocumentAnnotation, Assigned | 'note'>
+export type DocumentAnnotationDraft = Omit<DocumentAnnotation, Assigned | 'note'> & { readonly note?: string }
 export type AnnotationDraft = ChatAnnotationDraft | DocumentAnnotationDraft
 
 export interface AnnotationStore {
@@ -105,7 +105,7 @@ function reviveStored(value: unknown): Annotation | null {
   }
   if (a.document !== undefined) {
     const document = readDocumentSource(a.document)
-    return document ? { ...common, document, note: '' } : null
+    return document ? { ...common, document } : null
   }
   if (typeof a.anchorText !== 'string' || typeof a.occurrence !== 'number') return null
   if (a.anchors !== undefined) {
@@ -242,7 +242,7 @@ export function createAnnotationStore(
       ...draft,
       id: nextId,
       number,
-      note: draft.document ? '' : draft.note,
+      note: draft.note ?? '',
       state: 'active',
       createdAt: now(),
     }
@@ -265,7 +265,7 @@ export function createAnnotationStore(
     },
     add,
     setNote(id: number, note: string): void {
-      if (!annotations.some(a => a.id === id && !a.document)) return
+      if (!annotations.some(a => a.id === id)) return
       replace(id, { note })
     },
     remove(id: number): void {

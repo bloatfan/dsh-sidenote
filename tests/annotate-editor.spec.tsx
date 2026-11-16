@@ -130,14 +130,15 @@ describe('AnnotationEditor 关闭语义', () => {
   })
 
 
-  it('新建态保留多行，Shift+Enter 换行、IME Enter 不保存、Enter 保存', () => {
+  it('新建态保留多行，Enter 只换行、Cmd/Ctrl+Enter 保存、IME 不保存', () => {
     const view = mountEditor('new')
     const input = view.host.querySelector('textarea')!
     typeNote(input, '第一行\n第二行')
     act(() => { input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', shiftKey: true, bubbles: true })) })
-    act(() => { input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', isComposing: true, bubbles: true })) })
-    expect(view.onSave).not.toHaveBeenCalled()
     act(() => { input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })) })
+    act(() => { input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', isComposing: true, metaKey: true, bubbles: true })) })
+    expect(view.onSave).not.toHaveBeenCalled()
+    act(() => { input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', metaKey: true, bubbles: true })) })
     expect(view.onSave).toHaveBeenCalledWith('第一行\n第二行')
     view.unmount()
   })

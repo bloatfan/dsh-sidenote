@@ -296,7 +296,7 @@ test.describe('annotation editor lifecycle', () => {
     await selectQuote(page)
     await page.locator(OVERLAY).getByText(/^(Ask in side chat|在侧边聊天中提问)$/).click()
     await page.locator(`${OVERLAY} textarea`).fill('图片与引用一起发送')
-    await page.locator(`${OVERLAY} textarea`).press('Enter')
+    await page.locator(`${OVERLAY} textarea`).press('Control+Enter')
     await expect(page.locator(`${OVERLAY} textarea`)).toHaveCount(0)
     await expect(input).toHaveText('attachment quote admission')
     // Browser File intake → native draft registry → native serializer → host log.
@@ -361,7 +361,7 @@ test('real malformed-image rejection keeps quote and clean body, then retries on
   await selectQuote(page)
   await page.locator(OVERLAY).getByText(/^(Ask in side chat|在侧边聊天中提问)$/).click()
   await page.locator(`${OVERLAY} textarea`).fill('失败后需要保留的注解')
-  await page.locator(`${OVERLAY} textarea`).press('Enter')
+  await page.locator(`${OVERLAY} textarea`).press('Control+Enter')
   await expect(page.locator(`${OVERLAY} textarea`)).toHaveCount(0)
   const input = side.locator('[data-composer-input]')
   const body = 'retry after actual host rejection'
@@ -471,7 +471,7 @@ for (const real of [false, true]) test(`${real ? 'account Flash ' : ''}annotatio
     const editor = overlay.locator('textarea')
     await expect(editor).toBeVisible()
     await editor.fill(note)
-    await editor.press('Enter')
+    await editor.press('Control+Enter')
     await expect(editor).toHaveCount(0)
   }
   const checkCrossSources = async () => {

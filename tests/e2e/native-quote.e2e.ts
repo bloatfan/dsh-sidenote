@@ -133,7 +133,7 @@ for (const real of [false, true]) test(`${real ? 'account Flash ' : ''}native qu
   await toolbar.getByRole('button', { name: addAction }).click()
   const note = '侧边批注_' + randomUUID()
   await page.locator('[data-dsh-sidenote] textarea').fill(note)
-  await page.locator('[data-dsh-sidenote] textarea').press('Enter')
+  await page.locator('[data-dsh-sidenote] textarea').press('Control+Enter')
   await expect(side.getByRole('button', { name: /1 annotation|1 条注释/ })).toBeVisible()
   await page.reload()
   await expect(side).toHaveAttribute('data-sidenote-chat-session', childId)

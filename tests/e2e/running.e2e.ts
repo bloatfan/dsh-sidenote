@@ -21,7 +21,7 @@ async function addSideQuote(page: Page, note: string): Promise<void> {
   const overlay = page.locator('[data-dsh-sidenote]')
   await overlay.getByText(/^(Ask in side chat|在侧边聊天中提问)$/).click()
   await overlay.locator('textarea').fill(note)
-  await overlay.locator('textarea').press('Enter')
+  await overlay.locator('textarea').press('Control+Enter')
   await expect(overlay.locator('textarea')).toHaveCount(0)
 }
 

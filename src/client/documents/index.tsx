@@ -11,11 +11,18 @@ import { AnnotationBoundary } from '../annotations/boundary.tsx'
 import { useLocaleTick } from '../locale-tick.ts'
 import { t } from '../locales.ts'
 import { captureDocumentSelection, type DocumentSelection } from './selection.ts'
+import { AnnotationEditor } from '../annotations/editor.tsx'
 import css from '../annotations/selection.module.css'
 
 function DocumentSelectionToolbar({ ctx, store }: { ctx: Context; store: AnnotationStore }) {
   useLocaleTick()
   const [selection, setSelection] = useState<DocumentSelection | null>(null)
+  const [editor, setEditor] = useState<{
+    annotationId: number
+    x: number
+    y: number
+    bounds: { left: number; top: number; right: number; bottom: number }
+  } | null>(null)
   const [notice, setNotice] = useState('')
   const diagnostics = hostDiagnostics(ctx)
   const capabilities = useSyncExternalStore(diagnostics.subscribe, diagnostics.getSnapshot)
@@ -54,15 +61,44 @@ function DocumentSelectionToolbar({ ctx, store }: { ctx: Context; store: Annotat
     const current = captureDocumentSelection(currentSessionIdOf(ctx))
     if (!selection || !current || current.sessionId !== selection.sessionId || current.body !== selection.body
       || current.address !== selection.address || current.text !== selection.text || !available) { setSelection(null); return }
-    store.add({ sessionId: current.sessionId, text: current.text, document: current.source })
+    store.add({ sessionId: current.sessionId, text: current.text, document: current.source, note: '' })
     window.getSelection()?.removeAllRanges()
     setSelection(null); setNotice(t('documentAdded'))
   }
+  // 「Add to conversation」：同日文摘录先入 store，再用共享编辑器补注解；
+  // 备注随后随摘录一起发送（见 format.ts 的 documentNotesOf）。
+  const annotate = () => {
+    const current = captureDocumentSelection(currentSessionIdOf(ctx))
+    if (!selection || !current || current.sessionId !== selection.sessionId || current.body !== selection.body
+      || current.address !== selection.address || current.text !== selection.text || !available) { setSelection(null); return }
+    const rect = current.range.getBoundingClientRect()
+    const annotation = store.add({ sessionId: current.sessionId, text: current.text, document: current.source, note: '' })
+    // 编辑器落在选区下方、与选区左缘对齐：文件正文多从顶部开始，沿用聊天
+    // 角标的上方落点会盖住刚选中的文字。
+    setEditor({ annotationId: annotation.id, x: rect.left, y: rect.bottom + 28,
+      bounds: quoteClipOf(current.body, current.view) })
+    window.getSelection()?.removeAllRanges()
+    setSelection(null)
+  }
+  const edited = editor === null ? undefined : store.get(editor.annotationId)
   return <>{selection && <SelectionToolbarFrame range={selection.range} view={selection.view} clip={() => quoteClipOf(selection.body, selection.view)}>
     <button type="button" className={css.toolbarButton} disabled={!available} title={!available ? t('documentWaiting') : undefined}
       onMouseDown={event => event.preventDefault()} onClick={add}>{t('documentAdd')}</button>
+    <button type="button" className={css.toolbarButton} disabled={!available} title={!available ? t('documentWaiting') : t('documentAnnotateHint')}
+      onMouseDown={event => event.preventDefault()} onClick={annotate}>{t('addToConversation')}</button>
     {!available && <span className={css.toolbarStatus} role="status">{t('documentWaiting')}</span>}
-  </SelectionToolbarFrame>}{notice && <span className={css.selectionNotice} role="status">{notice}</span>}</>
+  </SelectionToolbarFrame>}
+  {editor !== null && edited !== undefined && edited.document !== undefined && <AnnotationEditor
+    annotation={edited}
+    mode="new"
+    x={editor.x}
+    y={editor.y}
+    bounds={editor.bounds}
+    onSave={note => { store.setNote(editor.annotationId, note); setEditor(null) }}
+    onDelete={() => { store.remove(editor.annotationId); setEditor(null) }}
+    onCancel={() => { store.remove(editor.annotationId); setEditor(null) }}
+  />}
+  {notice && <span className={css.selectionNotice} role="status">{notice}</span>}</>
 }
 
 export function registerDocumentQuotes(ctx: Context, store: AnnotationStore): void {

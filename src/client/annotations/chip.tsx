@@ -7,6 +7,7 @@ import { resolveInput } from '../host/input.ts'
 import { hostDiagnostics } from '../host/probes.ts'
 import type { ChatAnnotation, DocumentAnnotation, AnnotationStore } from './model.ts'
 import { DocumentQuoteContent } from './DocumentQuoteContent.tsx'
+import { saveNoteOnShortcut } from './noteKeys.ts'
 import type { ReflowStore } from '../reflow.ts'
 import { t } from '../locales.ts'
 import { useLocaleTick } from '../locale-tick.ts'
@@ -29,7 +30,7 @@ function AnnotationDetail({ item, store, pending, onEdit }: { item: ChatAnnotati
       <div className={css.contextLabel}>{t('userComment')}</div>
       {editing ? <textarea autoFocus rows={3} className={css.contextEditor} aria-label={t('userComment')} value={note} onChange={event => { setNote(event.target.value) }} onBlur={save} onKeyDown={event => {
         if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); cancelled.current = true; setEditing(false) }
-        if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) { event.preventDefault(); save() }
+        saveNoteOnShortcut(event, save)
       }} /> : <div className={css.contextText}>{item.note || <span className={css.contextLabel}>{t('noNote')}</span>}</div>}
     </div>
     <div className={css.contextActions}>
@@ -38,6 +39,33 @@ function AnnotationDetail({ item, store, pending, onEdit }: { item: ChatAnnotati
         else { cancelled.current = false; setNote(item.note); setEditing(true); onEdit() }
       }}>{editing ? <IconCheckOutline16 size={16} /> : <IconEditOutline16 size={16} />}</button>
       <button type="button" className={css.contextAction} disabled={pending} aria-label={t('removeAria', { n: item.number })} title={t('removeTitle')} onClick={() => { store.remove(item.id) }}><IconTrashOutline16 size={16} /></button>
+    </div>
+  </li>
+}
+
+function DocumentDetail({ item, store, pending, onEdit }: { item: DocumentAnnotation; store: AnnotationStore; pending: boolean; onEdit(): void }) {
+  const [editing, setEditing] = useState(false)
+  const [note, setNote] = useState(item.note)
+  const cancelled = useRef(false)
+  const save = () => { if (!cancelled.current) store.setNote(item.id, note); setEditing(false) }
+  return <li className={css.contextItem}>
+    <span className={css.contextNumber}>{item.number}.</span>
+    <div className={css.contextContent}>
+      <DocumentQuoteContent source={item.document} text={item.text} note={editing ? undefined : item.note} />
+      {editing && <>
+        <div className={css.contextLabel}>{t('userComment')}</div>
+        <textarea autoFocus rows={3} className={css.contextEditor} aria-label={t('userComment')} value={note} placeholder={t('notePlaceholder')} onChange={event => { setNote(event.target.value) }} onBlur={save} onKeyDown={event => {
+          if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); cancelled.current = true; setEditing(false) }
+          saveNoteOnShortcut(event, save)
+        }} />
+      </>}
+    </div>
+    <div className={css.contextActions}>
+      <button type="button" className={css.contextAction} disabled={pending} aria-label={t(editing ? 'saveNoteAria' : 'editNoteAria')} title={t(editing ? 'saveNoteAria' : 'editNoteAria')} onMouseDown={event => { if (editing) event.preventDefault() }} onClick={() => {
+        if (editing) save()
+        else { cancelled.current = false; setNote(item.note); setEditing(true); onEdit() }
+      }}>{editing ? <IconCheckOutline16 size={16} /> : <IconEditOutline16 size={16} />}</button>
+      <button type="button" className={css.contextAction} disabled={pending} aria-label={t('removeDocument', { n: item.number })} title={t('removeTitle')} onClick={() => { store.remove(item.id) }}><IconTrashOutline16 size={16} /></button>
     </div>
   </li>
 }
@@ -124,11 +152,7 @@ function ContextChips({ ctx, store, reflow, sessionId }: { ctx: Context; store: 
     {submission.error && <span className={css.storageNotice} role="alert">{submission.error}</span>}
     {shown && createPortal(<div ref={panel} id={id} role="dialog" tabIndex={-1} aria-label={label(open.kind)} className={css.contextPanel} style={position} data-sidenote-context-preview data-sidenote-no-quote onPointerEnter={clearTimer} onPointerLeave={leave}>
       <ul className={css.contextList}>
-        {open.kind === 'annotations' ? active.map(item => <AnnotationDetail key={item.id} item={item} store={store} pending={submission.pending} onEdit={() => { setOpen({ kind: 'annotations', pinned: true }) }} />) : open.kind === 'documents' ? documents.map(item => <li key={item.id} className={css.contextItem}>
-          <span className={css.contextNumber}>{item.number}.</span>
-          <DocumentQuoteContent source={item.document} text={item.text} />
-          <div className={css.contextActions}><button type="button" className={css.contextAction} disabled={submission.pending} aria-label={t('removeDocument', { n: item.number })} title={t('removeTitle')} onClick={() => store.remove(item.id)}><IconTrashOutline16 size={16} /></button></div>
-        </li>) : reflows.map((item, index) => <li key={item.id} className={css.contextItem}>
+        {open.kind === 'annotations' ? active.map(item => <AnnotationDetail key={item.id} item={item} store={store} pending={submission.pending} onEdit={() => { setOpen({ kind: 'annotations', pinned: true }) }} />) : open.kind === 'documents' ? documents.map(item => <DocumentDetail key={item.id} item={item} store={store} pending={submission.pending} onEdit={() => { setOpen({ kind: 'documents', pinned: true }) }} />) : reflows.map((item, index) => <li key={item.id} className={css.contextItem}>
           <span className={css.contextNumber}>{index + 1}.</span>
           <div className={css.contextContent}>
             <div className={css.contextSource}>{item.sideTitle}</div>

@@ -14,18 +14,31 @@ it('keeps excerpt snapshots isolated and persistent, with numbering independent 
   const second = store.add({ sessionId: 'main', text: '第二段', document: source })
   expect([first.number, chat.number, second.number]).toEqual([1, 1, 2])
   expect(first).not.toHaveProperty('anchorKey')
-  store.setNote(first.id, '不应变成批注')
-  expect(store.get(first.id)?.note).toBe('')
+  store.setNote(first.id, '文件摘录注解')
+  expect(store.get(first.id)?.note).toBe('文件摘录注解')
+  store.setNote(second.id, '第二段注解')
   store.remove(first.id)
   expect(store.get(second.id)?.number).toBe(1)
   expect(store.get(chat.id)?.number).toBe(1)
-  expect(createAnnotationStore(() => 2, storage).get(second.id)).toMatchObject({ text: '第二段', document: source })
+  expect(createAnnotationStore(() => 2, storage).get(second.id)).toMatchObject({ text: '第二段', document: source, note: '第二段注解' })
   store.markSent([second.id])
   expect(store.get(second.id)).toBeUndefined()
   const restored = createAnnotationStore(() => 2, storage)
   expect(restored.list('another-main')).toEqual([])
   expect(restored.list('main')).toEqual(store.list('main'))
   expect(restored.add({ sessionId: 'main', text: '新一轮', document: source }).number).toBe(1)
+})
+
+it('sends excerpt notes after the v4 envelope so old readers and the user bubble keep them visible', () => {
+  const wire = buildProtocolBlock([
+    { text: '第一段', note: '这段要和正文一起看', document: source, number: 1 },
+    { text: '第二段', note: '   ', document: { ...source, pageStart: undefined, pageEnd: undefined }, number: 2 },
+  ])
+  const parsed = splitProtocolPrefix(wire)!
+  expect(parsed.documents?.map(item => item.quote)).toEqual(['第一段', '第二段'])
+  const rest = wire.slice(parsed.length)
+  expect(rest).toMatch(/^(文档摘录备注：|Document excerpt notes:)\n\[1\] docs\/论文 & "设计"\.pdf · (第 2–3 页|Pages 2–3)\n这段要和正文一起看$/)
+  expect(wire.lastIndexOf('</sidenote-context>')).toBeLessThan(wire.indexOf('[1] docs/'))
 })
 
 it('round-trips full file content and source through a mixed message without letting XML-looking text break the prefix', () => {
